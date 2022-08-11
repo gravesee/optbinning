@@ -5,6 +5,7 @@ Optimal binning algorithm.
 # Guillermo Navas-Palencia <g.navas.palencia@gmail.com>
 # Copyright (C) 2019
 
+import json
 import numbers
 import time
 
@@ -30,6 +31,23 @@ from .prebinning import PreBinning
 from .preprocessing import preprocessing_user_splits_categorical
 from .preprocessing import split_data
 from .transformations import transform_binary_target
+
+from typing import Any, List, Optional, TypedDict, Union
+
+class BinningTableDictBase(TypedDict):
+    splits: np.ndarray
+    n_event: np.ndarray
+    n_nonevent: np.ndarray
+
+class BinningTableDict(BinningTableDictBase, total=False):
+    name: str
+    dtype: str
+    min_x: float
+    max_x: float
+    special_codes: List[Any]
+    categories: Union[List[Any],np.ndarray]
+    cat_others: Union[List[Any],np.ndarray]
+    user_splits: np.ndarray
 
 
 logger = Logger(__name__).logger
@@ -240,6 +258,14 @@ def _check_parameters(name, dtype, prebinning_method, solver, divergence,
 
     if not isinstance(verbose, bool):
         raise TypeError("verbose must be a boolean; got {}.".format(verbose))
+
+
+import json
+class NumpyEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, np.ndarray):
+            return obj.tolist()
+        return json.JSONEncoder.default(self, obj)
 
 
 class OptimalBinning(BaseOptimalBinning):
@@ -508,6 +534,34 @@ class OptimalBinning(BaseOptimalBinning):
         self._time_postprocessing = None
 
         self._is_fitted = False
+    
+    @classmethod
+    def fit_from_dict(cls, binning_table_dict: BinningTableDict):
+        name = binning_table_dict.get("name", None)
+        dtype = binning_table_dict.get("dtype", None)
+        optb = cls(name=name, dtype=dtype)
+        optb._binning_table = BinningTable(**binning_table_dict)
+        optb._is_fitted = True
+        return optb
+    
+    @classmethod
+    def from_json(cls, dump: str):
+        ndarray_keys = ("splits", "n_nonevent", "n_event")
+        binning_table_dict = json.loads(dump)
+        for k in ndarray_keys:
+            binning_table_dict[k] = np.array(binning_table_dict[k])
+        return cls.fit_from_dict(binning_table_dict)
+
+    def to_dict(self):
+        if self._is_fitted:
+            binning_table = self._binning_table.to_dict()
+            binning_table["name"] = self.name
+            binning_table["dtype"] = self.dtype
+            return binning_table
+        return {}
+            
+    def to_json(self):
+        return json.dumps(self.to_dict(), cls=NumpyEncoder)
 
     def fit(self, x, y, sample_weight=None, check_input=False):
         """Fit the optimal binning according to the given training data.

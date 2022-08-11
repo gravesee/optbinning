@@ -474,6 +474,10 @@ class BinningTable:
 
         self._is_built = False
         self._is_analyzed = False
+        
+    def to_dict(self):
+        keys = ("name", "dtype", "special_codes", "splits", "n_nonevent", "n_event", "min_x", "max_x", "categories", "user_splits")
+        return {k: getattr(self, k) for k in keys}
 
     def build(self, show_digits=2, add_totals=True):
         """Build the binning table.
